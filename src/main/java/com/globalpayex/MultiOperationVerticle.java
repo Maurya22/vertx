@@ -15,10 +15,10 @@ public class MultiOperationVerticle extends AbstractVerticle {
     public void start() throws Exception {
         vertx.setTimer(5000, id -> {
             int result = n1+n2;
-            logger.info("addition is :",result);
+            logger.info("addition is :"+ result);
             vertx.setTimer(3000, id2->{
                 int mulResult = (n1*n2)+result;
-                logger.info("multiplication is : ", mulResult);
+                logger.info("multiplication is : "+ mulResult);
             });
         });
 
