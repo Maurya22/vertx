@@ -21,25 +21,33 @@ public class StudentsRoute {
 
         router.get("/students").handler(StudentsRoute::getAllstudent);
         router.get("/students/:studentId").handler(StudentsRoute::getstudent);
-        router.post("/students").handler(StudentsRoute::createNewStudent);
+        router.post("/students").handler(routingContext -> createNewStudent(routingContext,vertx));
 
         return router;
     }
 
-    private static void createNewStudent(RoutingContext routingContext) {
+    private static void createNewStudent(RoutingContext routingContext, Vertx vertx) {
         JsonObject responseJson = routingContext.body().asJsonObject();
         Future<String> future = mongoClient.insert("students",responseJson);
-        future.onSuccess(studentresult ->
-        routingContext
-                .response()
-                .putHeader("Content-Type","application/json")
-                .end(responseJson.encode()));
-        future.onFailure(exception->
-                routingContext
-                        .response()
-                        .setStatusCode(501)
-                        .end("Server Error"));
+        future.onSuccess(studentresult -> {
+            responseJson.put("_id",studentresult);
+            vertx
+                    .eventBus()
+                    .publish("new.student",
+                            new JsonObject().put("_id", studentresult));
 
+            routingContext
+                    .response()
+                    .putHeader("Content-Type", "application/json")
+                    .end(responseJson.encode());
+            future.onFailure(exception ->
+                    routingContext
+                            .response()
+                            .setStatusCode(501)
+                            .end("Server Error"));
+
+
+        });
     }
 
     private static void getstudent(RoutingContext routingContext) {
@@ -79,14 +87,19 @@ public class StudentsRoute {
         List<String> genderQp = routingContext.queryParam("gender");
         List<String> addressQp = routingContext.queryParam("country");
         JsonObject query = new JsonObject();
+        JsonArray orConditions = new JsonArray();
         if (genderQp.size() > 0) {
-            query.put("gender", genderQp.get(0));
+           orConditions.add(new JsonObject().put("gender", genderQp.get(0)));
+
         }
         if(addressQp.size()>0){
-            query.put("address.country", addressQp.get(0));
+            orConditions.add(new JsonObject().put("address.country", addressQp.get(0)));
         }
+        if(orConditions.size()>0){
+        query.put("$or", orConditions);}
+
         Future<List<JsonObject>> future = mongoClient
-                .find("students", query);
+                .find("students",query);
         future.onSuccess(studentJsonObjects -> {
             logger.info("student {}", studentJsonObjects);
 
